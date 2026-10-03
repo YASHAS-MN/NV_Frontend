@@ -272,13 +272,26 @@ export function NebulaProvider({ children }: { children: React.ReactNode }) {
         setBalance(null);
       }
     } catch (error) {
-      setNotice({
-        tone: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Nebula gateway is offline. Start the backend and refresh.",
-      });
+      // Silently swallow errors from the legacy simulation endpoints
+      // (/api/market_state, /api/mempool, /api/chain) which are not yet
+      // implemented in the FastAPI backend. Avoids flooding the UI with
+      // error banners on every 5-second poll tick.
+      const msg = error instanceof Error ? error.message : "";
+      const isLegacyEndpointMissing =
+        msg.includes("market_state") ||
+        msg.includes("mempool") ||
+        msg.includes("chain") ||
+        msg.includes("404") ||
+        msg.includes("Nebula gateway is unreachable");
+      if (!isLegacyEndpointMissing) {
+        setNotice({
+          tone: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Nebula gateway is offline. Start the backend and refresh.",
+        });
+      }
     } finally {
       setIsRefreshing(false);
     }

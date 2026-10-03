@@ -27,6 +27,7 @@ export function SurfSellPage() {
   const [sandboxStatus, setSandboxStatus] = useState<"idle" | "running" | "completed" | "verifying" | "pending" | "rejected" | "finalized">("idle");
   const [sandboxResult, setSandboxResult] = useState<any>(null);
   const [verificationData, setVerificationData] = useState<any>(null);
+  const [localNotice, setLocalNotice] = useState<{ tone: "success" | "error" | "info"; message: string } | null>(null);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -35,6 +36,7 @@ export function SurfSellPage() {
     setSandboxStatus("running");
     setSandboxResult(null);
     setVerificationData(null);
+    setLocalNotice(null);
     clearNotice();
     
     try {
@@ -44,7 +46,7 @@ export function SurfSellPage() {
       
       if (response.status === "rejected") {
         setSandboxStatus("rejected");
-        setNotice({ tone: "error", message: response.message });
+        setLocalNotice({ tone: "error", message: response.message });
       } else {
         setVerificationData(response.on_chain_data);
         
@@ -57,11 +59,11 @@ export function SurfSellPage() {
            setSandboxStatus("completed");
         }
 
-        setNotice({ tone: "success", message: "Verification request successfully submitted." });
+        setLocalNotice({ tone: "success", message: "Verification request successfully submitted." });
       }
     } catch (err) {
       setSandboxStatus("idle");
-      setNotice({
+      setLocalNotice({
           tone: "error",
           message: err instanceof Error ? err.message : "Sandbox/Verification error"
       });
@@ -224,6 +226,10 @@ export function SurfSellPage() {
           {notice ? (
             <div className="mx-auto max-w-[1180px]" onClick={clearNotice}>
               <NoticeBanner tone={notice.tone} message={notice.message} />
+            </div>
+          ) : localNotice ? (
+            <div className="mx-auto max-w-[1180px]" onClick={() => setLocalNotice(null)}>
+              <NoticeBanner tone={localNotice.tone} message={localNotice.message} />
             </div>
           ) : null}
         </section>
