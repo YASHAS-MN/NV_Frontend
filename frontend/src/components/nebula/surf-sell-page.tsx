@@ -7,6 +7,7 @@ import { useNebula } from "./nebula-provider";
 import { NoticeBanner } from "./shared-notice";
 import { SignalPill } from "./signal-pill";
 import { SiteChrome } from "./site-chrome";
+import { submitWorkflow } from "@/lib/nebula-api";
 
 export function SurfSellPage() {
   const {
@@ -23,15 +24,48 @@ export function SurfSellPage() {
     file: null as File | null,
   });
 
+  const [sandboxStatus, setSandboxStatus] = useState<"idle" | "running" | "completed" | "verifying" | "pending" | "rejected" | "finalized">("idle");
+  const [sandboxResult, setSandboxResult] = useState<any>(null);
+  const [verificationData, setVerificationData] = useState<any>(null);
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.assetName || !form.price || !form.file) return;
+    if (!form.file) return;
+    
+    setSandboxStatus("running");
+    setSandboxResult(null);
+    setVerificationData(null);
+    clearNotice();
+    
+    try {
+      const response = await submitWorkflow(form.file);
+      
+      setSandboxResult(response.sandbox_result);
+      
+      if (response.status === "rejected") {
+        setSandboxStatus("rejected");
+        setNotice({ tone: "error", message: response.message });
+      } else {
+        setVerificationData(response.on_chain_data);
+        
+        // Match the status_string returned by the backend (PENDING, FINALIZED, etc.)
+        if (response.on_chain_data.status === "PENDING") {
+           setSandboxStatus("pending");
+        } else if (response.on_chain_data.status === "FINALIZED") {
+           setSandboxStatus("finalized");
+        } else {
+           setSandboxStatus("completed");
+        }
 
-    await publishAsset({
-      assetName: form.assetName,
-      price: Number(form.price),
-      file: form.file,
-    });
+        setNotice({ tone: "success", message: "Verification request successfully submitted." });
+      }
+    } catch (err) {
+      setSandboxStatus("idle");
+      setNotice({
+          tone: "error",
+          message: err instanceof Error ? err.message : "Sandbox/Verification error"
+      });
+    }
   };
 
   return (
@@ -137,19 +171,50 @@ export function SurfSellPage() {
                     />
                   </label>
 
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
-                    <button
-                      type="submit"
-                      disabled={isUploadBusy || !walletId}
-                      className="inline-flex items-center gap-2 rounded-full bg-nebula-accent px-5 py-3 text-sm font-medium text-slate-950 shadow-[0_0_24px_rgba(216,140,255,0.22)] transition hover:-translate-y-0.5 hover:bg-[#ecb1ff] disabled:opacity-50"
-                    >
-                      {isUploadBusy ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                      {isUploadBusy ? "Sending to mempool" : "Publish to mempool"}
-                    </button>
-                    <div className="inline-flex items-center gap-2 text-sm text-nebula-muted">
-                      <ShieldCheck className="size-4 text-nebula-signal" />
-                      Product updates after miner verification.
+                  <div className="flex flex-col gap-3 pt-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="submit"
+                        disabled={sandboxStatus === "running" || !form.file}
+                        className="inline-flex items-center gap-2 rounded-full bg-nebula-accent px-5 py-3 text-sm font-medium text-slate-950 shadow-[0_0_24px_rgba(216,140,255,0.22)] transition hover:-translate-y-0.5 hover:bg-[#ecb1ff] disabled:opacity-50"
+                      >
+                        {sandboxStatus === "running" ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                        {sandboxStatus === "running" ? "Executing Workflow..." : "Test in Sandbox & Verify"}
+                      </button>
+                      <div className="inline-flex items-center gap-2 text-sm text-nebula-muted">
+                        <ShieldCheck className="size-4 text-nebula-signal" />
+                        Execution triggers on-chain verification request.
+                      </div>
                     </div>
+                    
+                    {/* Status Display Area */}
+                    {sandboxStatus !== "idle" && (
+                      <div className="mt-4 rounded-[24px] border border-white/10 bg-black/40 p-5 text-sm text-white/90">
+                        <h3 className="mb-3 font-semibold text-white">Verification Workflow</h3>
+                        <div className="space-y-2">
+                          <p>Sandbox Status: <span className="text-nebula-accent">{sandboxStatus === "running" ? "Running..." : "Completed"}</span></p>
+                          {sandboxResult && (
+                            <>
+                              <p>Transcript Hash: <span className="font-mono text-xs text-nebula-muted">{sandboxResult.transcript_hash || sandboxResult.hash}</span></p>
+                              <p>Decision: <span className={sandboxResult.decision === "ACCEPT" ? "text-nebula-signal" : "text-nebula-warning"}>{sandboxResult.decision}</span></p>
+                            </>
+                          )}
+                          {sandboxStatus === "rejected" && <p>Verification Status: <span className="text-nebula-warning">Not submitted (Sandbox Rejected)</span></p>}
+                          {sandboxStatus === "pending" && verificationData && (
+                            <>
+                              <p>Verification Status: <span className="text-nebula-warning">Pending Finalization</span></p>
+                              <p>Verification ID: <span className="font-mono text-xs text-nebula-muted">{verificationData.verification_id}</span></p>
+                            </>
+                          )}
+                          {sandboxStatus === "finalized" && verificationData && (
+                            <>
+                              <p>Verification Status: <span className="text-nebula-signal">Finalized</span></p>
+                              <p>Verification ID: <span className="font-mono text-xs text-nebula-muted">{verificationData.verification_id}</span></p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </form>

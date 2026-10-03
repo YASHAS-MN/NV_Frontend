@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { inferCategory } from "../src/lib/catalog-utils.ts";
+import { inferCategory } from "../src/lib/catalog-utils";
 
 assert.equal(inferCategory("demo.py"), "Code");
 assert.equal(inferCategory("deck.pptx"), "Presentations");

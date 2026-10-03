@@ -149,3 +149,28 @@ export function purchaseAsset(input: {
     }),
   });
 }
+
+export async function submitWorkflow(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  let response: Response;
+  try {
+    response = await fetch(buildUrl("/api/workflow/submit"), {
+      method: "POST",
+      body: formData,
+    });
+  } catch (error) {
+    throw new Error(
+      error instanceof Error && error.message
+        ? `Nebula gateway is unreachable: ${error.message}`
+        : "Nebula gateway is unreachable."
+    );
+  }
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.detail || data.error || data.message || "Workflow submission failed.");
+  }
+  return data;
+}
